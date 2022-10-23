@@ -1,6 +1,6 @@
-import numpy as np
-import pandas as pd
+import time
 import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPRegressor
 
@@ -11,88 +11,66 @@ a = 0.1
 b = 0.2
 tau = 15
 
-nn = MLPRegressor(hidden_layer_sizes=100)
-nn.n_iter_ = 200
+nn = MLPRegressor(hidden_layer_sizes=50)  # Configuration
 nn.n_layers_ = 2
 nn.n_outputs_ = 1
 
 scaler = StandardScaler()
 
-datasets = data_creator()  # массив с 100 датасетов
-sheet_datasets = []
-for dataset in datasets:
-    sheet_datasets.append(create_dataset(dataset))
+
+def train():  # Train function
+    start = time.time()
+    for i in range(99):
+        dataset = pd.read_csv(f"datasets/dataset{i}").drop('Unnamed: 0', axis=1)
+        train_y = dataset['y_0']
+        train_x = dataset.drop('y_0', axis=1)
+        scaled_train_x = pd.DataFrame(scaler.fit_transform(train_x))
+        if (i % 5 != 0) | (i == 0):
+            nn.fit(scaled_train_x, train_y)
+            # print(f"Training set score: {nn.score(scaled_train_x, train_y):.3%}")
+        else:
+            print(f"Testing set score: {nn.score(scaled_train_x, train_y):.3%}\n")
+    finish = time.time()
+    print("Train finished!")
+    return finish - start  # Train time
 
 
-def scale_data(data):
-    scaled_data = scaler.fit_transform(data.values.T)
-    return pd.DataFrame(scaled_data).T
+def get_results(dataset):  # Analysis on dataset
+    calculated = dataset['x_0']
+    predicted = np.round(nn.predict(scaler.fit_transform(dataset)), 4)
 
+    # Statistics
+    print("Elements in hidden layer:", nn.hidden_layer_sizes)
+    print("MSE:", mean_squared_error(calculated[15:], predicted[:len(predicted) - tau]))
+    print("MAE:", mean_absolute_error(calculated[15:], predicted[:len(predicted) - tau]))
 
-def unscale_data(scaled_data):
-    unscaled_data = scaler.inverse_transform(scaled_data)
-    return pd.DataFrame(unscaled_data)
-
-
-def train():
-    for sheet_dataset in sheet_datasets:
-        scaled_dataset = scaler.fit_transform(sheet_dataset)
-        scaled_dataset = pd.DataFrame(scaled_dataset)
-        train_y = scaled_dataset[10]
-        train_x = scaled_dataset.drop(10, axis=1)
-        nn.fit(train_x, train_y)
-
-
-def prediction(array):
-    print(array)
-    calculated = [0.546, 0.8313, 0.9034, 0.4575, 0.4562, 0.2642, 0.9076, 1.1753, 0.2816,
-                  1.1399, 1.2056, 0.9617, 0.6693, 0.2189, 0.6081]
-    # Нейросеть
-    array_for_predict = array.drop('y_0', axis=1).values.reshape(1, -1)
-    print(array_for_predict)
-    print(array_for_predict[0])
-    predicated = []
-    for i in range(2001):
-        predict = np.round(nn.predict(array_for_predict), 4)
-        # print(predict)
-        predicated.append(predict)
-        del array_for_predict[0][0]
-        # print(array_for_predict)
-        array_for_predict.insert(9, i + 10, predict)  # (pd.DataFrame(predict))
-        # print(array_for_predict)
-    predicated = create_dataset(predicated)
-    # Формула
-    print(predicated)
-    for i in range(tau - 1, 2000):
-        calculated.append(
-            round(calculated[i] - a * calculated[i] + b * calculated[i + 1 - tau] / (1 + calculated[i + 1 - tau] ** 10),
-                  4))
-    calculated = create_dataset(calculated)
-    plt.plot(calculated._get_column_array(10)[100:])
-    plt.plot(predicated._get_column_array(10)[100:])
-    print(calculated._get_column_array(10))
-    print(predicated._get_column_array(10))
-    plt.xticks(np.linspace(0, 2000, 5))
-    plt.axis([0, 2000, 0, 1.5])
+    # Plot
+    plt.plot(calculated[100:], 'r-', label="Calculated")
+    plt.plot([i for i in range(100 + tau, len(predicted) + tau)], predicted[100:], 'b-', label="Predicted")
+    plt.xticks(np.linspace(100, 2100, 5))
+    plt.axis([100, 2100, 0, 2])
+    plt.legend()
     plt.show()
-    delta = 0
-    for i in range(calculated._get_column_array(10).size - 1):
-        delta += abs(abs(calculated._get_column_array(10)[i]) - abs(predicated._get_column_array(10)[i]))
-    print(delta)
 
 
-test = [0.546, 0.8313, 0.9034, 0.4575, 0.4562, 0.2642, 0.9076, 1.1753, 0.2816,
-        1.1399, 1.2056, 0.9617, 0.6693, 0.2189, 0.6081]
-test = create_dataset(test)
-print(test)
-train()
-for i in range(2000):
-    predicted_value = prediction(test)
-    calculated_value = round(test[i] - a * test[i] + b * test[i + 1 - tau] / (1 + test[i + 1 - tau] ** 10), 4)
+def test_nn(n_datasets):  # Analysis NN
+    mse, mae, m_score = 0, 0, 0
+    for i in range(n_datasets - 1):
+        dataset = create_sheet(create_data()).drop('y_0', axis=1)
+        calculated = dataset['x_0']
+        predicted = np.round(nn.predict(scaler.fit_transform(dataset)), 4)
+        mse += mean_squared_error(calculated[15:], predicted[:len(predicted) - tau])
+        mae += mean_absolute_error(calculated[15:], predicted[:len(predicted) - tau])
+
+    print(f"Elements in hidden layer: {nn.hidden_layer_sizes}")
+    print(f"MSE(for {n_datasets}): {mse / n_datasets}")
+    print(f"MAE(for {n_datasets}): {mae / n_datasets}")
+    print(f"Train time is: {train_time}sec.")
 
 
-# for row in scaled_dataset:
-# scaled_train_x = scaler.fit_transform(train_x)
-# nn.fit(scaled_dataset[row][:10].values.reshape(1, -1), np.array(scaled_dataset.iloc[row][10]))
-# print(scaled_dataset[row][:10].reshape(1, -1))
-# print(scaled_dataset.iloc[:][10])
+train_time = train()
+
+# new_test = create_sheet(create_data()).drop('y_0', axis=1)  # NN test example
+# get_results(new_test)
+
+test_nn(100)
